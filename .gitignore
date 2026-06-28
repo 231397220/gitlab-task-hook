@@ -9,4 +9,11 @@ gitlab-task-hook
 .idea/
 *.iml
 dist/
-build/
+
+# Build directory - ignore binaries but not scripts/docs
+build/*
+!build/.gitkeep
+!build/*.sh
+!build/*.md
+!build/Makefile
+!build/README.md
