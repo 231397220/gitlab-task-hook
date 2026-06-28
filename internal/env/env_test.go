@@ -19,14 +19,10 @@ func setenv(t *testing.T, key, val string) {
 }
 
 func TestLoad_Defaults(t *testing.T) {
-	// Unset all relevant vars
-	for _, k := range []string{"GL_USERNAME", "GL_PROJECT_PATH", "GL_PROTOCOL", "HOOK_MODE",
-		"WHITELIST_USERS", "WHITELIST_PROJECT_NAMES", "EXEMPT_MESSAGE_REGEX", "EXEMPT_MERGE_COMMIT"} {
+	for _, k := range []string{"GL_USERNAME", "GL_PROJECT_PATH", "GL_PROTOCOL", "HOOK_MODE"} {
 		old, had := os.LookupEnv(k)
 		os.Unsetenv(k)
-		k2 := k
-		had2 := had
-		old2 := old
+		k2, had2, old2 := k, had, old
 		t.Cleanup(func() {
 			if had2 {
 				os.Setenv(k2, old2)
@@ -38,46 +34,28 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.GLUsername != "" {
 		t.Errorf("GLUsername = %q, want empty", cfg.GLUsername)
 	}
-	if !cfg.ExemptMergeCommit {
-		t.Error("ExemptMergeCommit default should be true")
+	if cfg.GLProjectPath != "" {
+		t.Errorf("GLProjectPath = %q, want empty", cfg.GLProjectPath)
 	}
-	if len(cfg.WhitelistUsers) != 0 {
-		t.Errorf("WhitelistUsers = %v, want empty", cfg.WhitelistUsers)
-	}
-}
-
-func TestLoad_WhitelistUsers(t *testing.T) {
-	setenv(t, "WHITELIST_USERS", "ZhangSan  lisi  WANGWU")
-	cfg := Load()
-	if len(cfg.WhitelistUsers) != 3 {
-		t.Fatalf("WhitelistUsers len = %d, want 3", len(cfg.WhitelistUsers))
-	}
-	// All should be lowercased
-	for _, u := range cfg.WhitelistUsers {
-		for _, ch := range u {
-			if ch >= 'A' && ch <= 'Z' {
-				t.Errorf("whitelist user %q not lowercased", u)
-			}
-		}
+	if cfg.HookMode != "" {
+		t.Errorf("HookMode = %q, want empty", cfg.HookMode)
 	}
 }
 
-func TestLoad_WhitelistProjectNames(t *testing.T) {
-	setenv(t, "WHITELIST_PROJECT_NAMES", "Demo-Service , legacy-repo , MigrateTool")
-	cfg := Load()
-	if len(cfg.WhitelistProjectNames) != 3 {
-		t.Fatalf("WhitelistProjectNames len = %d, want 3", len(cfg.WhitelistProjectNames))
-	}
-	if cfg.WhitelistProjectNames[0] != "demo-service" {
-		t.Errorf("first entry = %q, want %q", cfg.WhitelistProjectNames[0], "demo-service")
-	}
-}
+func TestLoad_GLFields(t *testing.T) {
+	setenv(t, "GL_USERNAME", "zhangsan")
+	setenv(t, "GL_PROJECT_PATH", "group/repo")
+	setenv(t, "GL_PROTOCOL", "ssh")
 
-func TestLoad_ExemptMergeCommitFalse(t *testing.T) {
-	setenv(t, "EXEMPT_MERGE_COMMIT", "false")
 	cfg := Load()
-	if cfg.ExemptMergeCommit {
-		t.Error("ExemptMergeCommit should be false when env=false")
+	if cfg.GLUsername != "zhangsan" {
+		t.Errorf("GLUsername = %q, want zhangsan", cfg.GLUsername)
+	}
+	if cfg.GLProjectPath != "group/repo" {
+		t.Errorf("GLProjectPath = %q, want group/repo", cfg.GLProjectPath)
+	}
+	if cfg.GLProtocol != "ssh" {
+		t.Errorf("GLProtocol = %q, want ssh", cfg.GLProtocol)
 	}
 }
 

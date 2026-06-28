@@ -1,0 +1,49 @@
+## gitlab-task-hook bootstrap 配置
+## 路径：/etc/gitlab-task-hook/bootstrap.yaml
+## 说明：config-sync 启动时读取，告知程序连接哪个 Nacos 以及拉取哪条配置。
+##       hook 模式不读取本文件，只读本地缓存（cache_file）。
+## 文件权限建议：chmod 600 && chown git:git
+
+nacos:
+  ## 是否启用 Nacos 同步。false 时 config-sync 立即退出。
+  enabled: true
+
+  ## Nacos 服务地址（包含 scheme 和端口）
+  server_addr: "http://127.0.0.1:8848"
+
+  ## Nacos namespace ID（公共命名空间留空即可）
+  namespace_id: ""
+
+  ## Nacos group（必填）
+  group: "GITLAB_HOOK"
+
+  ## Nacos dataId（必填，建议与文件名保持一致）
+  data_id: "gitlab-task-hook.yaml"
+
+  ## Nacos 用户名 / 密码（无鉴权时留空）
+  username: ""
+  password: ""
+
+  ## AK/SK 鉴权（阿里云 MSE Nacos / RAM 鉴权时填写，否则留空）
+  access_key: ""
+  secret_key: ""
+
+  ## HTTP / SDK 超时（秒），建议 5~10
+  timeout_seconds: 5
+
+  ## 是否开启 Nacos 长轮询监听（watch 模式下有效）
+  ## true  → 使用 SDK 长连接，Nacos 推送变更后立即刷新本地缓存
+  ## false → 退化为定时轮询（poll_interval_seconds）
+  watch_enabled: true
+
+  ## 监听不可用时的轮询间隔（秒）
+  poll_interval_seconds: 30
+
+  ## 本地 YAML 缓存路径（hook 模式从这里读取）
+  cache_file: "/var/opt/gitlab/gitaly/custom_hooks/config/gitlab-task-hook.yaml"
+
+  ## 缓存元数据文件（记录 MD5 / 最后同步时间，留空则不写）
+  cache_meta_file: "/var/opt/gitlab/gitaly/custom_hooks/config/gitlab-task-hook.yaml.meta"
+
+  ## config-sync 日志文件（留空则输出到 stderr）
+  log_file: "/var/log/gitlab-task-hook/config-sync.log"

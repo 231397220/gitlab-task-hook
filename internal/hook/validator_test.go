@@ -1,10 +1,19 @@
 package hook
 
 import (
+	"regexp"
 	"testing"
 )
 
-// ---- IsRoot ----
+// defaultTaskIDRe and defaultBranchCheckScopeRe mirror the built-in defaults.
+var (
+	defaultBranchCheckScopeRe = regexp.MustCompile(`(?i)^refs/heads/(feature|dev)(/|_|-|$)`)
+	defaultTaskIDRe            = regexp.MustCompile(`\[#(TSK|DEF)-[^\[\]]+\]`)
+	defaultBranchWhitelistRe   = regexp.MustCompile(`(?i)^refs/heads/(init/|migrate/|tmp/)`)
+	defaultDenyDirectPushRe    = regexp.MustCompile(`^refs/heads/(master|main|release/.*)$`)
+)
+
+// ---- IsRoot / IsInRootBypass ----
 
 func TestIsRoot(t *testing.T) {
 	cases := []struct {
@@ -22,6 +31,19 @@ func TestIsRoot(t *testing.T) {
 		if got := IsRoot(c.input); got != c.want {
 			t.Errorf("IsRoot(%q) = %v, want %v", c.input, got, c.want)
 		}
+	}
+}
+
+func TestIsInRootBypass(t *testing.T) {
+	list := []string{"root", "deploy-bot"}
+	if !IsInRootBypass("root", list) {
+		t.Error("root should be in bypass list")
+	}
+	if !IsInRootBypass("Deploy-Bot", list) {
+		t.Error("Deploy-Bot (case-insensitive) should be in bypass list")
+	}
+	if IsInRootBypass("zhangsan", list) {
+		t.Error("zhangsan should not be in bypass list")
 	}
 }
 
@@ -61,13 +83,9 @@ func TestIsInProjectWhitelist(t *testing.T) {
 		{"legacy-repo", []string{"legacy-repo", "migrate-tool"}, true},
 	}
 	for _, c := range cases {
-		// whitelist entries must be lowercased (env.Load does this)
-		wl := make([]string, len(c.whitelist))
-		for i, v := range c.whitelist {
-			wl[i] = v
-		}
-		if got := IsInProjectWhitelist(c.repoName, wl); got != c.want {
-			t.Errorf("IsInProjectWhitelist(%q, %v) = %v, want %v", c.repoName, c.whitelist, got, c.want)
+		if got := IsInProjectWhitelist(c.repoName, c.whitelist); got != c.want {
+			t.Errorf("IsInProjectWhitelist(%q, %v) = %v, want %v",
+				c.repoName, c.whitelist, got, c.want)
 		}
 	}
 }
@@ -88,7 +106,8 @@ func TestIsInUserWhitelist(t *testing.T) {
 	}
 	for _, c := range cases {
 		if got := IsInUserWhitelist(c.username, c.whitelist); got != c.want {
-			t.Errorf("IsInUserWhitelist(%q, %v) = %v, want %v", c.username, c.whitelist, got, c.want)
+			t.Errorf("IsInUserWhitelist(%q, %v) = %v, want %v",
+				c.username, c.whitelist, got, c.want)
 		}
 	}
 }
@@ -96,6 +115,7 @@ func TestIsInUserWhitelist(t *testing.T) {
 // ---- HasValidTaskID ----
 
 func TestHasValidTaskID(t *testing.T) {
+	re := defaultTaskIDRe
 	valid := []string{
 		"add login api [#TSK-1001]",
 		"fix bug [#DEF-A20260001]",
@@ -104,7 +124,7 @@ func TestHasValidTaskID(t *testing.T) {
 		"fix [#DEF-abc]",
 	}
 	for _, s := range valid {
-		if !HasValidTaskID(s) {
+		if !HasValidTaskID(s, re) {
 			t.Errorf("HasValidTaskID(%q) = false, want true", s)
 		}
 	}
@@ -118,15 +138,21 @@ func TestHasValidTaskID(t *testing.T) {
 		"[#TSK-]",
 	}
 	for _, s := range invalid {
-		if HasValidTaskID(s) {
+		if HasValidTaskID(s, re) {
 			t.Errorf("HasValidTaskID(%q) = true, want false", s)
 		}
+	}
+
+	// nil regex → always false
+	if HasValidTaskID("fix [#TSK-1]", nil) {
+		t.Error("HasValidTaskID with nil regex should return false")
 	}
 }
 
 // ---- MatchesBranchCheckScope ----
 
 func TestMatchesBranchCheckScope(t *testing.T) {
+	re := defaultBranchCheckScopeRe
 	inScope := []string{
 		"refs/heads/dev",
 		"refs/heads/dev/login",
@@ -137,7 +163,7 @@ func TestMatchesBranchCheckScope(t *testing.T) {
 		"refs/heads/feature-login",
 	}
 	for _, ref := range inScope {
-		if !MatchesBranchCheckScope(ref) {
+		if !MatchesBranchCheckScope(ref, re) {
 			t.Errorf("MatchesBranchCheckScope(%q) = false, want true", ref)
 		}
 	}
@@ -151,22 +177,28 @@ func TestMatchesBranchCheckScope(t *testing.T) {
 		"refs/tags/v1.0",
 	}
 	for _, ref := range outOfScope {
-		if MatchesBranchCheckScope(ref) {
+		if MatchesBranchCheckScope(ref, re) {
 			t.Errorf("MatchesBranchCheckScope(%q) = true, want false", ref)
 		}
+	}
+
+	// nil regex → always false
+	if MatchesBranchCheckScope("refs/heads/dev", nil) {
+		t.Error("MatchesBranchCheckScope with nil regex should return false")
 	}
 }
 
 // ---- MatchesBranchWhitelist ----
 
 func TestMatchesBranchWhitelist(t *testing.T) {
+	re := defaultBranchWhitelistRe
 	hit := []string{
 		"refs/heads/init/base",
 		"refs/heads/migrate/gitlab16",
 		"refs/heads/tmp/test",
 	}
 	for _, ref := range hit {
-		if !MatchesBranchWhitelist(ref) {
+		if !MatchesBranchWhitelist(ref, re) {
 			t.Errorf("MatchesBranchWhitelist(%q) = false, want true", ref)
 		}
 	}
@@ -177,7 +209,7 @@ func TestMatchesBranchWhitelist(t *testing.T) {
 		"refs/heads/master",
 	}
 	for _, ref := range miss {
-		if MatchesBranchWhitelist(ref) {
+		if MatchesBranchWhitelist(ref, re) {
 			t.Errorf("MatchesBranchWhitelist(%q) = true, want false", ref)
 		}
 	}
@@ -219,7 +251,8 @@ func TestCommitterMatchesPushUser(t *testing.T) {
 	}
 	for _, c := range cases {
 		if got := CommitterMatchesPushUser(c.email, c.username); got != c.want {
-			t.Errorf("CommitterMatchesPushUser(%q, %q) = %v, want %v", c.email, c.username, got, c.want)
+			t.Errorf("CommitterMatchesPushUser(%q, %q) = %v, want %v",
+				c.email, c.username, got, c.want)
 		}
 	}
 }
@@ -234,7 +267,7 @@ func TestExtractBranchName(t *testing.T) {
 		{"refs/heads/dev/login", "dev/login"},
 		{"refs/heads/feature", "feature"},
 		{"refs/heads/master", "master"},
-		{"refs/tags/v1.0", "refs/tags/v1.0"}, // not a branch ref, returned as-is
+		{"refs/tags/v1.0", "refs/tags/v1.0"},
 	}
 	for _, c := range cases {
 		if got := ExtractBranchName(c.ref); got != c.want {
@@ -297,31 +330,29 @@ func TestIsMergeCommit(t *testing.T) {
 // ---- MatchesMessageWhitelist ----
 
 func TestMatchesMessageWhitelist(t *testing.T) {
-	if MatchesMessageWhitelist("anything", "") {
-		t.Error("empty pattern should return false")
+	// nil regex → false
+	if MatchesMessageWhitelist("anything", nil) {
+		t.Error("nil regex should return false")
 	}
-	if !MatchesMessageWhitelist("auto: merge branch", "^auto:") {
+	re := regexp.MustCompile(`^auto:`)
+	if !MatchesMessageWhitelist("auto: merge branch", re) {
 		t.Error("matching pattern should return true")
 	}
-	if MatchesMessageWhitelist("manual commit", "^auto:") {
+	if MatchesMessageWhitelist("manual commit", re) {
 		t.Error("non-matching pattern should return false")
-	}
-	if MatchesMessageWhitelist("test", "[invalid") {
-		t.Error("invalid regex should return false (no panic)")
 	}
 }
 
 // ---- MatchesPushDenyBranch ----
 
 func TestMatchesPushDenyBranch(t *testing.T) {
-	pattern := `^refs/heads/(master|main|release/.*)$`
+	re := defaultDenyDirectPushRe
 
-	// empty pattern disables the feature
-	if MatchesPushDenyBranch("refs/heads/master", "") {
-		t.Error("empty pattern should return false")
+	// nil regex disables the feature
+	if MatchesPushDenyBranch("refs/heads/master", nil) {
+		t.Error("nil regex should return false")
 	}
 
-	// branches that should be denied
 	denied := []string{
 		"refs/heads/master",
 		"refs/heads/main",
@@ -329,25 +360,19 @@ func TestMatchesPushDenyBranch(t *testing.T) {
 		"refs/heads/release/2026-Q1",
 	}
 	for _, ref := range denied {
-		if !MatchesPushDenyBranch(ref, pattern) {
+		if !MatchesPushDenyBranch(ref, re) {
 			t.Errorf("MatchesPushDenyBranch(%q) = false, want true", ref)
 		}
 	}
 
-	// branches that should not be denied
 	allowed := []string{
 		"refs/heads/dev/login",
 		"refs/heads/feature/auth",
 		"refs/heads/hotfix/123",
 	}
 	for _, ref := range allowed {
-		if MatchesPushDenyBranch(ref, pattern) {
+		if MatchesPushDenyBranch(ref, re) {
 			t.Errorf("MatchesPushDenyBranch(%q) = true, want false", ref)
 		}
-	}
-
-	// invalid regex → false, no panic
-	if MatchesPushDenyBranch("refs/heads/master", "[invalid") {
-		t.Error("invalid regex should return false (no panic)")
 	}
 }

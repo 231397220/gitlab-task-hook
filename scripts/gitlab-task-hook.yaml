@@ -1,0 +1,91 @@
+## gitlab-task-hook 规则配置
+## 本文件发布到 Nacos（group=GITLAB_HOOK，dataId=gitlab-task-hook.yaml）
+## config-sync 拉取后写入本地缓存，hook 模式直接读本地缓存，不访问 Nacos。
+##
+## 修改后在 Nacos 控制台发布即可，无需重启 hook 进程；
+## 下一次 git push 触发 hook 时自动读取新配置。
+
+version: "1.0"
+
+## 全局开关：false 时 hook 对所有 push 直接放行
+enabled: true
+
+mode:
+  ## 默认校验模式
+  ## enforce：违规时拒绝 push（exit 1）
+  ## warn   ：违规时输出提示但放行（exit 0）
+  ## 可通过环境变量 HOOK_MODE=warn 临时覆盖，运维应急时使用
+  default: "enforce"
+
+rules:
+
+  ## ── root 用户跳过所有校验 ──────────────────────────────────
+  root_bypass:
+    enabled: true
+    usernames:
+      - "root"
+
+  ## ── 禁止强推（non fast-forward / rewrite history） ─────────
+  non_fast_forward:
+    enabled: true
+
+  ## ── 受保护分支禁止直接 push ────────────────────────────────
+  ## 命中 branch_regex 且 GL_PROTOCOL 在 deny_protocols 中时拒绝。
+  ## web 来源（MR/Web 合并）在 allow_protocols 中，不受限制。
+  deny_direct_push:
+    enabled: true
+    branch_regex: "(?i)^refs/heads/(master|sit_.*|uat_.*)$"
+    allow_protocols:
+      - "web"
+    deny_protocols:
+      - "http"
+      - "ssh"
+      - ""          # GL_PROTOCOL 为空时视为直接 push
+
+  ## ── GL_PROTOCOL=web 时跳过后续 push 类校验 ────────────────
+  ## 适用于 GitLab Merge Request 合并、Web IDE 提交场景。
+  web_bypass_push_checks:
+    enabled: true
+    protocols:
+      - "web"
+
+  ## ── 提交人 email 前缀必须与 GL_USERNAME 一致 ──────────────
+  committer_match_push_user:
+    enabled: true
+    compare_strategy: "email_prefix"   # 取 committer email @ 前缀与 GL_USERNAME 比较
+    skip_merge_commit: true            # merge commit 跳过此校验
+    case_insensitive: true
+
+  ## ── 指定分支 commit subject 必须含任务号 ──────────────────
+  task_id:
+    enabled: true
+    ## 哪些分支需要任务号校验
+    branch_regex: "(?i)^refs/heads/(feature/|dev)(/|_|-|$)"
+    ## 任务号格式：[#TSK-xxx] 或 [#DEF-xxx]，xxx 至少 1 个字符且不含方括号
+    subject_regex: "\\[#(TSK|DEF)-[^\\[\\]]+\\]"
+    check_subject_only: true           # 只校验 subject，不校验 body
+    exempt_merge_commit: true          # merge commit 跳过任务号校验
+    exempt_message_regex: ""           # 特殊 message 豁免正则，留空禁用
+    ## 示例：exempt_message_regex: "^(Revert|auto:|ci:)"
+
+## ── 白名单（只豁免任务号校验，不豁免强推和提交人校验） ────
+whitelist:
+  ## 豁免任务号校验的用户（GL_USERNAME，大小写不敏感）
+  users: []
+  ## 示例: users: ["zhangsan", "deploy-bot"]
+
+  ## 豁免任务号校验的分支（按 ref 全名匹配）
+  branch_regex: "(?i)^refs/heads/(init/|migrate/|tmp/)"
+
+  ## 豁免任务号校验的项目（按 GL_PROJECT_PATH 最后一段 repo name 匹配）
+  projects:
+    - "demo-service"
+    - "legacy-repo"
+
+messages:
+  language: "zh-CN"
+  show_fix_guide: true
+
+logging:
+  level: "info"
+  stderr: true
