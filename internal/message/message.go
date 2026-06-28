@@ -82,6 +82,33 @@ commitid: %s
 	)
 }
 
+// ProtectedBranchDirect returns the violation message when a direct push is made to a
+// push-deny branch (one that only allows MR/Web merges).
+func ProtectedBranchDirect(ctx ViolationContext) string {
+	return fmt.Sprintf(`禁止直接推送（该分支仅允许通过 Merge Request 合并）
+
+project: %s
+repo: %s
+user: %s
+branch: %s
+
+【如何操作】
+该分支已配置为受保护分支，禁止通过 git push 直接推送，只允许通过 GitLab Merge Request（MR）合并。
+
+1) 将您的改动推送到功能分支
+   git push origin <your-feature-branch>
+
+2) 在 GitLab 中创建 Merge Request，目标分支选择 %s
+
+3) 通过审批后，由 GitLab 完成合并`,
+		orUnknown(ctx.ProjectPath),
+		orUnknown(ctx.RepoName),
+		orUnknown(ctx.Username),
+		orUnknown(ctx.BranchName),
+		orUnknown(ctx.BranchName),
+	)
+}
+
 // MissingTaskID returns the missing-task-ID violation message (section 9.5).
 func MissingTaskID(ctx ViolationContext) string {
 	return fmt.Sprintf(`提交信息不符合规范：缺少任务ID（[#TSK-...] 或 [#DEF-...]）

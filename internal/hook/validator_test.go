@@ -310,3 +310,44 @@ func TestMatchesMessageWhitelist(t *testing.T) {
 		t.Error("invalid regex should return false (no panic)")
 	}
 }
+
+// ---- MatchesPushDenyBranch ----
+
+func TestMatchesPushDenyBranch(t *testing.T) {
+	pattern := `^refs/heads/(master|main|release/.*)$`
+
+	// empty pattern disables the feature
+	if MatchesPushDenyBranch("refs/heads/master", "") {
+		t.Error("empty pattern should return false")
+	}
+
+	// branches that should be denied
+	denied := []string{
+		"refs/heads/master",
+		"refs/heads/main",
+		"refs/heads/release/1.0",
+		"refs/heads/release/2026-Q1",
+	}
+	for _, ref := range denied {
+		if !MatchesPushDenyBranch(ref, pattern) {
+			t.Errorf("MatchesPushDenyBranch(%q) = false, want true", ref)
+		}
+	}
+
+	// branches that should not be denied
+	allowed := []string{
+		"refs/heads/dev/login",
+		"refs/heads/feature/auth",
+		"refs/heads/hotfix/123",
+	}
+	for _, ref := range allowed {
+		if MatchesPushDenyBranch(ref, pattern) {
+			t.Errorf("MatchesPushDenyBranch(%q) = true, want false", ref)
+		}
+	}
+
+	// invalid regex → false, no panic
+	if MatchesPushDenyBranch("refs/heads/master", "[invalid") {
+		t.Error("invalid regex should return false (no panic)")
+	}
+}

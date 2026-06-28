@@ -13,6 +13,7 @@ type ViolationType int
 
 const (
 	ViolationForcePush ViolationType = iota + 1
+	ViolationProtectedBranchDirect
 	ViolationCommitterMismatch
 	ViolationMissingTaskID
 )
@@ -23,7 +24,7 @@ type Violation struct {
 	Message string
 }
 
-// CheckRef evaluates all rules (priority 2-14) for a single ref update.
+// CheckRef evaluates all rules (priority 2-15) for a single ref update.
 // Returns nil when the ref passes all checks.
 // Returns a non-nil error only for unexpected internal failures (e.g. git command crash).
 func CheckRef(ref RefUpdate, cfg env.Config, g git.Runner) (*Violation, error) {
@@ -66,7 +67,15 @@ func CheckRef(ref RefUpdate, cfg env.Config, g git.Runner) (*Violation, error) {
 		return nil, nil
 	}
 
-	// Priority 6: compute new commits
+	// Priority 6: protected branch — deny direct push (only MR/web merge allowed)
+	if MatchesPushDenyBranch(ref.RefName, cfg.PushDenyBranchRegex) {
+		return &Violation{
+			Type:    ViolationProtectedBranchDirect,
+			Message: message.ProtectedBranchDirect(msgCtx),
+		}, nil
+	}
+
+	// Priority 7: compute new commits
 	commits, err := g.NewCommits(ref.NewValue)
 	if err != nil {
 		return nil, fmt.Errorf("rev-list for %s: %w", ref.RefName, err)
@@ -85,14 +94,14 @@ func CheckRef(ref RefUpdate, cfg env.Config, g git.Runner) (*Violation, error) {
 	return nil, nil
 }
 
-// checkCommit evaluates rules priority 7-14 for a single new commit.
+// checkCommit evaluates rules priority 8-15 for a single new commit.
 func checkCommit(
 	commit, refName string,
 	msgCtx message.ViolationContext,
 	cfg env.Config,
 	g git.Runner,
 ) (*Violation, error) {
-	// Priority 7: merge commit exemption
+	// Priority 8: merge commit exemption
 	if cfg.ExemptMergeCommit {
 		parentCount, err := g.ParentCount(commit)
 		if err != nil {
@@ -103,7 +112,7 @@ func checkCommit(
 		}
 	}
 
-	// Priority 8: committer vs push user
+	// Priority 9: committer vs push user
 	committerEmail, err := g.CommitterEmail(commit)
 	if err != nil {
 		return nil, fmt.Errorf("committer email for %s: %w", commit, err)
@@ -118,28 +127,28 @@ func checkCommit(
 		}, nil
 	}
 
-	// Priority 9: is branch in task-check scope?
+	// Priority 10: is branch in task-check scope?
 	if !MatchesBranchCheckScope(refName) {
 		return nil, nil
 	}
 
-	// Priority 10: user whitelist → skip task check
+	// Priority 11: user whitelist → skip task check
 	if IsInUserWhitelist(cfg.GLUsername, cfg.WhitelistUsers) {
 		return nil, nil
 	}
 
-	// Priority 11: branch whitelist → skip task check
+	// Priority 12: branch whitelist → skip task check
 	if MatchesBranchWhitelist(refName) {
 		return nil, nil
 	}
 
-	// Priority 12: project whitelist → skip task check
+	// Priority 13: project whitelist → skip task check
 	repoName := ExtractRepoName(cfg.GLProjectPath)
 	if IsInProjectWhitelist(repoName, cfg.WhitelistProjectNames) {
 		return nil, nil
 	}
 
-	// Priority 13: message whitelist → skip task check
+	// Priority 14: message whitelist → skip task check
 	subject, err := g.CommitSubject(commit)
 	if err != nil {
 		return nil, fmt.Errorf("commit subject for %s: %w", commit, err)
@@ -148,7 +157,7 @@ func checkCommit(
 		return nil, nil
 	}
 
-	// Priority 14: task ID check
+	// Priority 15: task ID check
 	if !HasValidTaskID(subject) {
 		ctx := msgCtx
 		ctx.CommitID = commit

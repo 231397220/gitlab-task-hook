@@ -101,6 +101,19 @@ func MatchesMessageWhitelist(subject, pattern string) bool {
 	return re.MatchString(subject)
 }
 
+// MatchesPushDenyBranch returns true when refName matches the push-deny regex pattern.
+// Returns false when pattern is empty (feature disabled) or the pattern is invalid.
+func MatchesPushDenyBranch(refName, pattern string) bool {
+	if pattern == "" {
+		return false
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return false
+	}
+	return re.MatchString(refName)
+}
+
 // ExtractEmailPrefix returns the part of an email before the '@'.
 // Returns the full string if there is no '@'.
 func ExtractEmailPrefix(email string) string {

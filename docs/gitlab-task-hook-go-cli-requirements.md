@@ -1119,3 +1119,91 @@ Go 更适合当前长期生产场景：
 中期：Go CLI 重写。
 长期：Go binary + shell wrapper + 版本化发布。
 ```
+## 新增需求：指定分支禁止直接 push，只允许 MR/Web 合并
+
+### 需求背景
+部分关键分支，例如 master、SIT_XXXXX、uat_xxxxx，不允许研发人员本地直接 git push 写入，只能通过 GitLab Merge Request 合并进入目标分支。
+
+### 新增规则
+新增“受保护分支禁止直接 push”规则。
+
+当满足以下条件时，拒绝本次 ref 更新：
+1. GL_USERNAME 不是 root；
+2. ref-name 是分支 ref，即以 refs/heads/ 开头；
+3. ref-name 命中 PUSH_DENY_BRANCH_REGEX；
+4. GL_PROTOCOL 是 http 或 ssh，或者 GL_PROTOCOL 为空。
+
+当 GL_PROTOCOL=web 时，认为是 GitLab Web/MR 类动作，允许写入该分支。
+
+### 默认正则
+新增配置项：
+
+PUSH_DENY_BRANCH_REGEX
+
+默认值：
+
+(?i)^refs/heads/(master|sit_.*|uat_.*)$
+
+说明：
+- 匹配 refs/heads/master
+- 匹配 refs/heads/SIT_20260101
+- 匹配 refs/heads/sit_20260101
+- 匹配 refs/heads/UAT_20260101
+- 匹配 refs/heads/uat_20260101
+- 大小写不敏感
+
+### 规则优先级
+该规则放在 non fast-forward 校验之后，GL_PROTOCOL=web 跳过 push 类校验之前。
+
+更新后的规则顺序：
+1. root 用户跳过所有校验。
+2. 删除 ref 放行。
+3. tag ref 放行。
+4. non fast-forward 校验。
+5. 指定分支禁止直接 push 校验。
+6. GL_PROTOCOL=web 时跳过后续 push 类校验。
+7. 计算本次 push 新引入 commit。
+8. 提交人与 push 人一致性校验。
+9. 任务号校验相关规则。
+
+### 伪代码
+if !IsRootUser(env.GLUsername) &&
+   IsGitPush(env.GLProtocol) &&
+   IsDirectPushDeniedBranch(refName, pushDenyBranchRegex) {
+    fail(mode, DirectPushDeniedMessage(refName, env))
+}
+
+IsGitPush 逻辑：
+- GL_PROTOCOL=http：true
+- GL_PROTOCOL=ssh：true
+- GL_PROTOCOL=""：true，环境变量缺失时按普通 push 处理
+- GL_PROTOCOL=web：false
+
+### 错误提示文案
+当前分支禁止直接 push，请通过 Merge Request 合并代码。
+
+【规范要求】
+该分支属于受保护分支，只允许通过 GitLab Merge Request 合并，不允许本地直接 git push。
+
+project: <GL_PROJECT_PATH 或 unknown>
+repo: <repo name 或 unknown>
+user: <GL_USERNAME 或 unknown>
+branch: <branch name>
+protocol: <GL_PROTOCOL 或 unknown>
+
+【如何处理】
+1) 请从目标分支拉取新分支进行开发：
+   git checkout -b feature/<your-feature> origin/<target-branch>
+
+2) 完成开发后推送 feature/dev 分支：
+   git push origin feature/<your-feature>
+
+3) 在 GitLab 页面发起 Merge Request，目标分支选择：
+   <branch name>
+
+4) 通过 MR 审核后再合并到目标分支。
+
+### 注意事项
+1. 用户白名单、项目白名单、分支白名单不绕过该规则。
+2. 只有 root 用户跳过所有校验。
+3. GL_PROTOCOL=web 不一定只代表 MR 合并，也可能包含 Web IDE 等 Web 写入动作。若要严格禁止 Web IDE 直接改关键分支，需要配合 GitLab Protected Branch 权限策略。

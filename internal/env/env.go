@@ -18,6 +18,7 @@ type Config struct {
 	WhitelistProjectNames []string // from WHITELIST_PROJECT_NAMES, comma-separated
 	ExemptMessageRegex    string   // from EXEMPT_MESSAGE_REGEX
 	ExemptMergeCommit     bool     // from EXEMPT_MERGE_COMMIT, default true
+	PushDenyBranchRegex   string   // from PUSH_DENY_BRANCH_REGEX; empty = disabled
 }
 
 // IsWarnMode returns true only when HOOK_MODE is explicitly set to "warn".
@@ -28,12 +29,13 @@ func (c Config) IsWarnMode() bool {
 // Load reads all relevant environment variables and returns a Config.
 func Load() Config {
 	c := Config{
-		GLUsername:        getenv("GL_USERNAME"),
-		GLProjectPath:     getenv("GL_PROJECT_PATH"),
-		GLProtocol:        getenv("GL_PROTOCOL"),
-		HookMode:          getenv("HOOK_MODE"),
-		ExemptMessageRegex: getenv("EXEMPT_MESSAGE_REGEX"),
-		ExemptMergeCommit: config.DefaultExemptMergeCommit,
+		GLUsername:          getenv("GL_USERNAME"),
+		GLProjectPath:       getenv("GL_PROJECT_PATH"),
+		GLProtocol:          getenv("GL_PROTOCOL"),
+		HookMode:            getenv("HOOK_MODE"),
+		ExemptMessageRegex:  getenv("EXEMPT_MESSAGE_REGEX"),
+		ExemptMergeCommit:   config.DefaultExemptMergeCommit,
+		PushDenyBranchRegex: getenv("PUSH_DENY_BRANCH_REGEX"),
 	}
 
 	// Parse WHITELIST_USERS (space-separated, lowercase for comparison)

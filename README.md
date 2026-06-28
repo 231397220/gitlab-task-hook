@@ -168,6 +168,7 @@ ln -sf gitlab-task-hook-v1.0.0 /var/opt/gitlab/gitaly/custom_hooks/bin/gitlab-ta
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `HOOK_MODE` | `enforce` | `enforce`：违规阻断；`warn`：仅提示 |
+| `PUSH_DENY_BRANCH_REGEX` | 空 | 匹配此正则的分支禁止直接 push，只允许 MR/Web 合并；空则禁用 |
 | `WHITELIST_USERS` | 空 | 跳过任务号校验的用户，空格分隔，大小写不敏感 |
 | `WHITELIST_PROJECT_NAMES` | 空 | 跳过任务号校验的项目名，逗号分隔，大小写不敏感 |
 | `EXEMPT_MESSAGE_REGEX` | 空 | commit subject 匹配此正则则跳过任务号校验 |
@@ -179,6 +180,8 @@ ln -sf gitlab-task-hook-v1.0.0 /var/opt/gitlab/gitaly/custom_hooks/bin/gitlab-ta
 #!/bin/sh
 export WHITELIST_PROJECT_NAMES="legacy-service,migrate-tool"
 export HOOK_MODE=enforce
+# 禁止直接 push 到 master / main / release/* 分支
+export PUSH_DENY_BRANCH_REGEX='^refs/heads/(master|main|release/.*)$'
 exec /var/opt/gitlab/gitaly/custom_hooks/bin/gitlab-task-hook
 ```
 
@@ -207,12 +210,13 @@ commit subject 必须包含（二选一）：
 | 3 | tag 放行 |
 | 4 | 禁止强推（non fast-forward） |
 | 5 | GL_PROTOCOL=web 跳过 push 类校验 |
-| 6 | 计算新引入 commit |
-| 7 | merge commit 豁免 |
-| 8 | 提交人与 push 用户一致性校验 |
-| 9 | 分支不在任务号校验范围 → 跳过 |
-| 10 | 用户白名单 → 跳过任务号校验 |
-| 11 | 分支白名单 → 跳过任务号校验 |
-| 12 | 项目白名单 → 跳过任务号校验 |
-| 13 | message 白名单 → 跳过任务号校验 |
-| 14 | 任务号校验 |
+| **6** | **PUSH_DENY_BRANCH_REGEX：分支匹配则禁止直接 push** |
+| 7 | 计算新引入 commit |
+| 8 | merge commit 豁免 |
+| 9 | 提交人与 push 用户一致性校验 |
+| 10 | 分支不在任务号校验范围 → 跳过 |
+| 11 | 用户白名单 → 跳过任务号校验 |
+| 12 | 分支白名单 → 跳过任务号校验 |
+| 13 | 项目白名单 → 跳过任务号校验 |
+| 14 | message 白名单 → 跳过任务号校验 |
+| 15 | 任务号校验 |
