@@ -12,6 +12,11 @@
 
 set -e
 
+# 切换到项目根目录（脚本位于 build/ 子目录下）
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
+
 # 颜色输出
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -139,7 +144,7 @@ check_prerequisites() {
 
     # 检查是否在项目根目录
     if [ ! -f "go.mod" ]; then
-        log_error "go.mod 不存在，请在项目根目录执行此脚本"
+        log_error "go.mod 不存在，项目根目录: $PROJECT_ROOT"
         exit 1
     fi
 
@@ -191,7 +196,7 @@ build_binary() {
     fi
 
     # 执行构建
-    eval "$env_vars go build -ldflags=\"$ldflags\" -o \"$output_file\" ." || {
+    eval "$env_vars go build -ldflags=\"$ldflags\" -o \"$output_file\" ./cmd/gitlab-task-hook" || {
         log_error "构建失败: $output_file"
         return 1
     }
@@ -213,7 +218,7 @@ build_binary() {
 get_current_platform() {
     local os=$(go env GOOS)
     local arch=$(go env GOARCH)
-    echo "${os}-${arch}"
+    echo "${os}:${arch}"
 }
 
 # 验证二进制文件
