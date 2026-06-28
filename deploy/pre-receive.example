@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# GitLab pre-receive hook wrapper
+#
+# 此脚本由 GitLab Gitaly 在 git push 前调用。
+# 脚本读取 stdin（git refs 变更信息）并传递给 gitlab-task-hook hook 模式。
+#
+# 配置：
+# 1. 复制此脚本到 /var/opt/gitlab/gitaly/custom_hooks/hooks/pre-receive
+# 2. 设置执行权限：chmod 755 /var/opt/gitlab/gitaly/custom_hooks/hooks/pre-receive
+# 3. 确保 gitlab-task-hook 二进制存在于：/var/opt/gitlab/gitaly/custom_hooks/bin/gitlab-task-hook
+#
+# 环境变量（由 GitLab Gitaly 自动设置）：
+# - GL_PROJECT_PATH: 项目路径，如 group/project-name
+# - GL_USERNAME: 执行 push 操作的 GitLab 用户名
+# - GL_PROTOCOL: 操作协议，如 http / ssh / web
+# - GL_REPOSITORY: 完整仓库路径
+#
+
+set -e
+
+# Hook 二进制路径
+HOOK_BIN="/var/opt/gitlab/gitaly/custom_hooks/bin/gitlab-task-hook"
+
+# 检查 hook 二进制是否存在
+if [ ! -x "$HOOK_BIN" ]; then
+    echo "Error: gitlab-task-hook binary not found at $HOOK_BIN" >&2
+    exit 1
+fi
+
+# 执行 hook 模式
+# 使用 exec 替换当前进程，确保退出码正确传递
+exec "$HOOK_BIN" hook

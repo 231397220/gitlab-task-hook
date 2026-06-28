@@ -1,0 +1,47 @@
+[Unit]
+Description=GitLab Task Hook Nacos Config Sync Service
+Documentation=file:///usr/share/doc/gitlab-task-hook/DEPLOYMENT.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# 运行用户和组
+# 与 GitLab Gitaly 进程的用户一致
+User=git
+Group=git
+
+# 服务类型
+Type=simple
+
+# 启动命令
+# 使用 config-sync --watch 持续监听 Nacos 配置变化
+ExecStart=/var/opt/gitlab/gitaly/custom_hooks/bin/gitlab-task-hook config-sync --watch --bootstrap /etc/gitlab-task-hook/bootstrap.yaml
+
+# 重启策略
+# 若进程意外退出，自动重启
+Restart=always
+RestartSec=10
+
+# 文件描述符限制
+LimitNOFILE=65535
+
+# 内存限制（可选，根据实际调整）
+# MemoryMax=500M
+
+# 进程重启超时
+# 若在此时间内重启失败过多次，标记为 failed
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# 日志输出
+# 由 systemd journal 捕获（journalctl 查看）
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gitlab-task-hook-config-sync
+
+# 工作目录（可选）
+WorkingDirectory=/var/opt/gitlab/gitaly/custom_hooks
+
+[Install]
+# 启用开机自启
+WantedBy=multi-user.target
