@@ -3,11 +3,12 @@ package config
 import (
 	"fmt"
 	"regexp"
+	"text/template"
 )
 
-// CompiledConfig wraps HookConfig with pre-compiled regular expressions.
-// All regexes are compiled once at load time; nil means the rule/field is
-// disabled or has no pattern configured.
+// CompiledConfig wraps HookConfig with pre-compiled regular expressions and
+// message templates. All regexes and templates are compiled once at load time;
+// nil means the rule/field is disabled or has no pattern configured.
 type CompiledConfig struct {
 	*HookConfig
 	DenyDirectPushRegex   *regexp.Regexp
@@ -15,11 +16,16 @@ type CompiledConfig struct {
 	TaskIDRegex           *regexp.Regexp
 	BranchWhitelistRegex  *regexp.Regexp
 	ExemptMessageRegex    *regexp.Regexp
+
+	// Message templates — nil means use the built-in default for that message.
+	MsgNonFastForward    *template.Template
+	MsgDirectPushDenied  *template.Template
+	MsgCommitterMismatch *template.Template
+	MsgTaskIDMissing     *template.Template
 }
 
-// Compile validates and pre-compiles all regex fields in hcfg.
-// Returns an error if any regex fails to compile (validation should have
-// already caught these, but Compile is the authoritative compile step).
+// Compile validates and pre-compiles all regex and template fields in hcfg.
+// Returns an error if any regex or template fails to compile.
 func Compile(hcfg *HookConfig) (*CompiledConfig, error) {
 	c := &CompiledConfig{HookConfig: hcfg}
 
@@ -59,6 +65,32 @@ func Compile(hcfg *HookConfig) (*CompiledConfig, error) {
 
 	if err := mustCompile("whitelist.branch_regex",
 		hcfg.Whitelist.BranchRegex, &c.BranchWhitelistRegex); err != nil {
+		return nil, err
+	}
+
+	// Compile message template overrides. Empty string → nil (use built-in default).
+	compileMsg := func(name, tplStr string, dst **template.Template) error {
+		if tplStr == "" {
+			return nil
+		}
+		t, err := template.New(name).Parse(tplStr)
+		if err != nil {
+			return fmt.Errorf("messages.templates.%s: %w", name, err)
+		}
+		*dst = t
+		return nil
+	}
+
+	if err := compileMsg("non_fast_forward", hcfg.Messages.Templates.NonFastForward, &c.MsgNonFastForward); err != nil {
+		return nil, err
+	}
+	if err := compileMsg("direct_push_denied", hcfg.Messages.Templates.DirectPushDenied, &c.MsgDirectPushDenied); err != nil {
+		return nil, err
+	}
+	if err := compileMsg("committer_mismatch", hcfg.Messages.Templates.CommitterMismatch, &c.MsgCommitterMismatch); err != nil {
+		return nil, err
+	}
+	if err := compileMsg("task_id_missing", hcfg.Messages.Templates.TaskIDMissing, &c.MsgTaskIDMissing); err != nil {
 		return nil, err
 	}
 

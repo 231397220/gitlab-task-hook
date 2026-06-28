@@ -22,6 +22,23 @@ GitLab `pre-receive` server hook —— Go CLI 实现。
 
 ---
 
+## 消息提示优化
+
+push 被拒绝时，hook 向 stderr 输出详细的违规信息和修复指引。为帮助技术能力弱的开发者快速自助解决问题，所有四类提示已优化完善：
+
+### 四个场景的拒绝提示
+
+| 场景 | 触发条件 | 包含内容 |
+|------|---------|--------|
+| **禁止强制推送** | non fast-forward 提交 | ✓ 当前状态（项目/用户/分支）<br>✓ 修复步骤（git pull --rebase）<br>✓ 冲突处理说明 |
+| **禁止直接 push 到受保护分支** | 直接 push 到 master/sit/uat 等 | ✓ 当前状态 + 协议信息<br>✓ 修复步骤（创建功能分支→发起 MR）<br>✓ GitLab 操作指引 |
+| **提交人与 push 用户不一致** | committer email 不匹配 | ✓ 当前状态 + 具体 commit ID<br>✓ 修复步骤（配置 git user + amend/rebase）<br>✓ 单提交与多提交修改方法 |
+| **缺少任务 ID** | commit subject 无 `[#TSK-xxx]` | ✓ 当前状态 + 具体 commit ID 和 subject<br>✓ 修复步骤（amend/rebase）<br>✓ 多种场景修改指引 |
+
+所有提示支持**运维动态更新**，无需发版部署（详见[消息模板配置](#消息模板配置)）。
+
+---
+
 ## 架构
 
 ```
@@ -106,6 +123,71 @@ nacos:
 模板文件：[`scripts/gitlab-task-hook.yaml`](scripts/gitlab-task-hook.yaml)
 
 **修改配置生效流程**：在 Nacos 控制台发布新配置 → `config-sync` 监听到变化 → 原子写入本地缓存 → 下一次 `git push` 触发 hook 时自动读取新配置，无需重启任何进程。
+
+### 3. 消息模板配置（可选）
+
+hook 拒绝 push 时输出的提示信息可在 YAML 配置中自定义，无需修改代码或重新部署。
+
+在 `gitlab-task-hook.yaml` 中新增 `messages.templates` 部分（空字符串表示使用内置默认模板）：
+
+```yaml
+messages:
+  language: "zh-CN"
+  show_fix_guide: true
+  templates:
+    # 禁止强制推送 — 空字符串 = 使用内置默认模板
+    non_fast_forward: |
+      禁止强制推送（non fast-forward / rewrite history）
+      
+      project: {{.ProjectPath}}
+      repo:    {{.RepoName}}
+      user:    {{.Username}}
+      branch:  {{.BranchName}}
+      
+      【如何处理】
+      您的推送被拒绝，因为本地历史与远端不一致。
+      1) 拉取远端最新并本地追加：
+         git pull --rebase origin {{.BranchName}}
+      ...
+    
+    # 禁止直接 push 到受保护分支
+    direct_push_denied: |
+      当前分支禁止直接 push，请通过 Merge Request 合并代码。
+      ...
+    
+    # 提交人与 push 用户不一致
+    committer_mismatch: |
+      提交人信息不符合规范：commit 提交人与 push 用户不一致
+      ...
+    
+    # 缺少任务 ID
+    task_id_missing: |
+      提交信息不符合规范：缺少任务ID（[#TSK-...] 或 [#DEF-...]）
+      ...
+```
+
+**模板语法**：Go `text/template`，支持以下变量：
+
+| 变量 | 说明 | 所有场景可用 |
+|------|------|-----------|
+| `{{.ProjectPath}}` | 项目完整路径，如 `group/my-repo` | ✓ |
+| `{{.RepoName}}` | 项目名称（路径最后一段） | ✓ |
+| `{{.Username}}` | GitLab 用户名 | ✓ |
+| `{{.BranchName}}` | 分支短名，如 `master` 或 `feature/auth` | ✓ |
+| `{{.Protocol}}` | 操作协议：`http`/`ssh`/`web` | 场景1 |
+| `{{.CommitID}}` | 问题 commit 的 SHA | 场景2/3 |
+| `{{.CommitSubject}}` | commit subject（第一行）| 场景2 |
+| `{{.CommitterEmail}}` | committer email | 场景3 |
+
+**修改生效流程**：
+1. 在 Nacos 控制台修改 `gitlab-task-hook.yaml` 的 `messages.templates` 部分
+2. `config-sync` 检测变化 → 验证 YAML 合法性 → 原子写入本地缓存
+3. 下一次 `git push` 触发 hook 时，自动使用新模板渲染错误提示
+
+**降级策略**：
+- 模板为空 → 使用内置默认模板
+- 模板语法非法 → `config-sync` 拒绝写入，保留旧配置
+- 模板渲染错误 → hook 自动回退内置默认模板，不影响 push 校验
 
 ---
 
@@ -216,6 +298,8 @@ chown git:git /etc/gitlab-task-hook/bootstrap.yaml
 - **Group**：`GITLAB_HOOK`
 - **Data ID**：`gitlab-task-hook.yaml`
 - **内容**：参考 [`scripts/gitlab-task-hook.yaml`](scripts/gitlab-task-hook.yaml)
+
+> **提示**：配置中的 `messages.templates` 部分用于自定义 push 拒绝时的提示文案，可选项。详见[消息模板配置](#消息模板配置)。
 
 ### 首次拉取配置（验证连通性）
 

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -96,6 +97,34 @@ func TestValidate_DisabledDenyDirectPushSkipsProtocolCheck(t *testing.T) {
 	errs := Validate(cfg)
 	if hasFieldError(errs, "rules.deny_direct_push") {
 		t.Error("disabled deny_direct_push should skip protocol validation")
+	}
+}
+
+func TestValidate_BadMessageTemplate(t *testing.T) {
+	cfg := validConfig()
+	cfg.Messages.Templates.NonFastForward = "{{.Unclosed"
+	errs := Validate(cfg)
+	if !hasFieldError(errs, "messages.templates.non_fast_forward") {
+		t.Error("expected template syntax error for non_fast_forward")
+	}
+}
+
+func TestValidate_ValidMessageTemplate(t *testing.T) {
+	cfg := validConfig()
+	cfg.Messages.Templates.NonFastForward = "branch: {{.BranchName}}"
+	errs := Validate(cfg)
+	if hasFieldError(errs, "messages.templates.non_fast_forward") {
+		t.Error("valid template should not produce an error")
+	}
+}
+
+func TestValidate_EmptyMessageTemplates(t *testing.T) {
+	// Default config has no templates set — should always pass.
+	errs := Validate(validConfig())
+	for _, e := range errs {
+		if strings.HasPrefix(e.Field, "messages.templates") {
+			t.Errorf("default config should not have template errors, got: %v", e)
+		}
 	}
 }
 

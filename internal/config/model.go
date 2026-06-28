@@ -68,8 +68,18 @@ type Whitelist struct {
 }
 
 type Messages struct {
-	Language     string `yaml:"language"`
-	ShowFixGuide bool   `yaml:"show_fix_guide"`
+	Language     string           `yaml:"language"`
+	ShowFixGuide bool             `yaml:"show_fix_guide"`
+	Templates    MessageTemplates `yaml:"templates"`
+}
+
+// MessageTemplates holds optional Go text/template overrides for each violation
+// message. An empty string means "use the built-in default for that message."
+type MessageTemplates struct {
+	NonFastForward    string `yaml:"non_fast_forward"`
+	DirectPushDenied  string `yaml:"direct_push_denied"`
+	CommitterMismatch string `yaml:"committer_mismatch"`
+	TaskIDMissing     string `yaml:"task_id_missing"`
 }
 
 type LogConf struct {

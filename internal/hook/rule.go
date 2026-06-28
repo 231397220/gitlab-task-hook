@@ -48,6 +48,7 @@ func CheckRef(ref RefUpdate, e env.Config, hcfg *config.CompiledConfig, g git.Ru
 		RepoName:    repoName,
 		Username:    e.GLUsername,
 		BranchName:  branchName,
+		Protocol:    e.GLProtocol,
 	}
 
 	// Rule 3: non fast-forward (only when updating an existing branch)
@@ -59,7 +60,7 @@ func CheckRef(ref RefUpdate, e env.Config, hcfg *config.CompiledConfig, g git.Ru
 		if !IsFastForward(mergeBase, ref.OldValue) {
 			return &Violation{
 				Type:    ViolationForcePush,
-				Message: message.ForcePush(msgCtx),
+				Message: message.NonFastForwardMessage(hcfg.MsgNonFastForward, msgCtx),
 			}, nil
 		}
 	}
@@ -70,7 +71,7 @@ func CheckRef(ref RefUpdate, e env.Config, hcfg *config.CompiledConfig, g git.Ru
 		IsInProtocolList(e.GLProtocol, hcfg.Rules.DenyDirectPush.DenyProtocols) {
 		return &Violation{
 			Type:    ViolationProtectedBranchDirect,
-			Message: message.ProtectedBranchDirect(msgCtx),
+			Message: message.DirectPushDeniedMessage(hcfg.MsgDirectPushDenied, msgCtx),
 		}, nil
 	}
 
@@ -128,7 +129,7 @@ func checkCommit(
 				ctx.CommitterEmail = committerEmail
 				return &Violation{
 					Type:    ViolationCommitterMismatch,
-					Message: message.CommitterMismatch(ctx),
+					Message: message.CommitterMismatchMessage(hcfg.MsgCommitterMismatch, ctx),
 				}, nil
 			}
 		}
@@ -181,7 +182,7 @@ func checkCommit(
 		ctx.CommitSubject = subject
 		return &Violation{
 			Type:    ViolationMissingTaskID,
-			Message: message.MissingTaskID(ctx),
+			Message: message.TaskIDMissingMessage(hcfg.MsgTaskIDMissing, ctx),
 		}, nil
 	}
 

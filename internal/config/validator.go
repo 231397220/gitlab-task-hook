@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"regexp"
+	"text/template"
 )
 
 // ValidationError describes a single configuration validation failure.
@@ -63,6 +64,19 @@ func Validate(hcfg *HookConfig) []ValidationError {
 	}
 
 	compileField("whitelist.branch_regex", hcfg.Whitelist.BranchRegex)
+
+	// Validate message template overrides (Go text/template syntax).
+	validateTemplate := func(field, tplStr string) {
+		if tplStr != "" {
+			if _, err := template.New("").Parse(tplStr); err != nil {
+				add(field, "invalid Go template syntax: "+err.Error())
+			}
+		}
+	}
+	validateTemplate("messages.templates.non_fast_forward", hcfg.Messages.Templates.NonFastForward)
+	validateTemplate("messages.templates.direct_push_denied", hcfg.Messages.Templates.DirectPushDenied)
+	validateTemplate("messages.templates.committer_mismatch", hcfg.Messages.Templates.CommitterMismatch)
+	validateTemplate("messages.templates.task_id_missing", hcfg.Messages.Templates.TaskIDMissing)
 
 	return errs
 }
