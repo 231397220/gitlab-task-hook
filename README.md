@@ -431,3 +431,9 @@ commit subject 必须包含（二选一）：
 - 默认只校验 subject（第一行），不校验 body
 - 可通过 `task_id.subject_regex` 自定义格式
 - 可通过 `task_id.exempt_message_regex` 配置豁免正则
+
+---
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
