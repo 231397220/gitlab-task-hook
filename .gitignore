@@ -1,1 +1,12 @@
 gitlab-task-hook
+*.o
+*.a
+*.so
+.DS_Store
+*.swp
+*.swo
+*~
+.idea/
+*.iml
+dist/
+build/
